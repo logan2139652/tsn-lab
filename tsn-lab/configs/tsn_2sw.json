@@ -1,0 +1,130 @@
+{
+  "p4": {
+    "bmv2_json": "/home/aaa/tsn-lab/build/tsn_basic.json",
+    "p4info": "/home/aaa/tsn-lab/build/tsn_basic.p4info.txt"
+  },
+  "pipeline": {
+    "table": "ingress.table0_control.table0",
+    "action": "ingress.table0_control.set_egress_port",
+    "port_param": "port",
+    "match_fields": {
+      "in_port": "standard_metadata.ingress_port",
+      "eth_src": "hdr.ethernet.src_addr",
+      "eth_dst": "hdr.ethernet.dst_addr"
+    }
+  },
+  "switches": {
+    "s1": {
+      "device_id": 1,
+      "grpc_port": 50051,
+      "gcl": [1, 2, 3, 0, 1, 2, 3, 0],
+      "gcl_path": "/tmp/tsn_gcl_s1.txt",
+      "phase_path": "/tmp/tsn_phase_s1.txt"
+    },
+    "s2": {
+      "device_id": 2,
+      "grpc_port": 50052,
+      "gcl": [0, 1, 2, 3, 0, 1, 2, 3],
+      "gcl_path": "/tmp/tsn_gcl_s2.txt",
+      "phase_path": "/tmp/tsn_phase_s2.txt"
+    }
+  },
+  "hosts": {
+    "h1": {
+      "ip": "10.0.0.1/24",
+      "mac": "00:00:00:00:00:01"
+    },
+    "h2": {
+      "ip": "10.0.0.2/24",
+      "mac": "00:00:00:00:00:02"
+    }
+  },
+  "links": [
+    {"node1": "h1", "node2": "s1", "port2": 1, "bw": 100},
+    {"node1": "s1", "node2": "s2", "port1": 2, "port2": 1, "bw": 100},
+    {"node1": "h2", "node2": "s2", "port2": 2, "bw": 100}
+  ],
+  "routes": {
+    "s1": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:01",
+        "dst_mac": "00:00:00:00:00:02",
+        "out_port": 2
+      },
+      {
+        "in_port": 2,
+        "src_mac": "00:00:00:00:00:02",
+        "dst_mac": "00:00:00:00:00:01",
+        "out_port": 1
+      }
+    ],
+    "s2": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:01",
+        "dst_mac": "00:00:00:00:00:02",
+        "out_port": 2
+      },
+      {
+        "in_port": 2,
+        "src_mac": "00:00:00:00:00:02",
+        "dst_mac": "00:00:00:00:00:01",
+        "out_port": 1
+      }
+    ]
+  },
+  "tsn": {
+	  "sync_switch": "s1",
+	  "slot_us": 10000,
+	  "cycle_us": 80000,
+	  "lead_us": 3000,
+	  "phase_offset_us": 0,
+		"flows": [
+		  {
+		    "fid": 101,
+		    "qid": 6,
+		    "queue": 1,
+		    "slots": [0, 4],
+		    "type": "tsn",
+		    "payload": 300
+		  },
+		  {
+		    "fid": 102,
+		    "qid": 5,
+		    "queue": 2,
+		    "slots": [1, 5],
+		    "type": "tsn",
+		    "payload": 500
+		  },
+		  {
+		    "fid": 103,
+		    "qid": 4,
+		    "queue": 3,
+		    "slots": [2, 6],
+		    "type": "tsn",
+		    "payload": 500
+		  },
+		  {
+		    "fid": 200,
+		    "qid": 7,
+		    "queue": 0,
+		    "type": "background",
+		    "pps": 100,
+		    "payload": 1200
+		  }
+		]
+	},
+  "traffic": {
+    "sender": {
+	  "iface": "h1-eth0",
+	  "duration": 10,
+	  "start_delay": 0.2
+    },
+    "receiver": {
+      "iface": "h2-eth0",
+      "duration": 30,
+      "csv": "/tmp/tsn_recv_delay.csv"
+    }  
+  }
+}
