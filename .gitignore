@@ -11,3 +11,7 @@
 !/targets/simple_switch/
 !/targets/simple_switch/simple_switch.h
 !/targets/simple_switch/simple_switch.cpp
+
+# Allow test reports
+!/reports/
+!reports/*
