@@ -15,3 +15,7 @@
 # Allow test reports
 !/reports/
 !reports/*
+
+# Allow test reports
+!/reports/
+!reports/*
