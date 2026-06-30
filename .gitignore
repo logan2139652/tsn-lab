@@ -1,21 +1,20 @@
-# Ignore everything by default
-/*
-
-# Whitelist only the files we modify
-!/.gitignore
-!/include/
-!/include/bm/
-!/include/bm/bm_sim/
-!/include/bm/bm_sim/queueing.h
-!/targets/
-!/targets/simple_switch/
-!/targets/simple_switch/simple_switch.h
-!/targets/simple_switch/simple_switch.cpp
-
-# Allow test reports
-!/reports/
-!reports/*
-
-# Allow test reports
-!/reports/
-!reports/*
+# Ignore all generated/build files
+*.o
+*.lo
+*.la
+*.a
+*.so
+*.pb.cc
+*.pb.h
+.libs/
+.deps/
+Makefile
+Makefile.in
+autom4te.cache/
+stamp-*
+config.*
+.dirstamp
+*~
+*.swp
+*.pyc
+__pycache__/
