@@ -31,7 +31,10 @@ parser parser_impl(packet_in packet,
         local_metadata.next_hop_id = 0;
         local_metadata.is_tsn = 1w0;
         local_metadata.fid = 0;
-        local_metadata.qid = 0;
+        local_metadata.hop_index = 0;
+        local_metadata.target_slot = 0;
+        local_metadata.base_queue = 0;
+
 
         transition select(standard_metadata.ingress_port) {
             CPU_PORT: parse_packet_out;
@@ -58,7 +61,7 @@ parser parser_impl(packet_in packet,
 
         local_metadata.is_tsn = 1w1;
         local_metadata.fid = hdr.tsn.fid;
-        local_metadata.qid = hdr.tsn.qid;
+        local_metadata.hop_index = hdr.tsn.hop_index;
 
         transition select(hdr.tsn.next_type) {
             ETH_TYPE_IPV4: parse_ipv4;

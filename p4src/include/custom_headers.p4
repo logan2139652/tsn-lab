@@ -34,7 +34,9 @@ struct local_metadata_t {
 
     bit<1>        is_tsn;
     bit<16>       fid;
-    bit<8>        qid;
+    bit<8>        hop_index;
+    bit<8>        target_slot;
+    bit<8>        base_queue;
 }
 
 #endif

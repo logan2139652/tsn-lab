@@ -41,7 +41,12 @@ const bit<8> ETH_HEADER_LEN = 14;
 header tsn_t {
     bit<16> next_type;
     bit<16> fid;
-    bit<8>  qid;
+    bit<8>  hop_index;
+    bit<8>  path_len;
+    bit<8>  slot0;
+    bit<8>  slot1;
+    bit<8>  slot2;
+    bit<8>  slot3;
     bit<8>  flags;
 }
 

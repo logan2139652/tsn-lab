@@ -1,5 +1,8 @@
+backups/
 __pycache__/
 *.pyc
+build/
 *.bak_*
 *.swap
 *~
+.DS_Store

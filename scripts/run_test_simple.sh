@@ -114,8 +114,8 @@ done
 step "Step 5/5: Delay Analysis"
 
 echo ""
-echo "SESSION    KIND    FID   QID     COUNT    AVG(us)   P50(us)   P95(us)   P99(us)   MAX(us)  DROP(%)"
-echo "-------------------------------------------------------------------------------------------------------"
+echo "SESSION    KIND    FID   COUNT    AVG(us)   P50(us)   P95(us)   P99(us)   MAX(us)   ANOMALY"
+echo "-------------------------------------------------------------------------------------------"
 
 for csv in "$RESULT_DIR"/tsn_recv_*.csv; do
     [[ -f "$csv" ]] || continue
@@ -130,6 +130,16 @@ config_path = "$CONFIG"
 # Load config to get expected counts
 with open(config_path) as f:
     cfg = json.load(f)
+
+# Determine src/dst MAC for this session
+sessions_cfg = cfg.get("traffic", {}).get("sessions", {})
+src_mac = None
+dst_mac = None
+if sess in sessions_cfg:
+    src_host = sessions_cfg[sess]["sender"]["host"]
+    dst_host = sessions_cfg[sess]["receiver"]["host"]
+    src_mac = cfg["hosts"][src_host]["mac"]
+    dst_mac = cfg["hosts"][dst_host]["mac"]
 
 # Get expected packets from config
 expected = {}
@@ -153,10 +163,21 @@ with open(csv_path) as f:
     reader = csv.DictReader(f)
     groups = {}
     for row in reader:
-        key = (row['kind'], int(row['fid']), int(row['qid']))
+        key = (row['kind'], int(row['fid']))
         groups.setdefault(key, []).append(float(row['delay_us']))
 
-for (kind, fid, qid), delays in sorted(groups.items()):
+# Compute hop count from JSON routes
+hops = 0
+routes = cfg.get("routes", {})
+for sw_name, sw_routes in routes.items():
+    for r in sw_routes:
+        if r.get("src_mac", "") == src_mac and r.get("dst_mac", "") == dst_mac:
+            hops += 1
+            break
+# threshold = (hops+2) * slot_us = (H+1)*slot where H=total hops
+threshold_us = (hops + 2) * slot_us
+
+for (kind, fid), delays in sorted(groups.items()):
     delays.sort()
     avg = statistics.mean(delays)
     p50 = delays[int((len(delays)-1)*0.50)]
@@ -164,15 +185,19 @@ for (kind, fid, qid), delays in sorted(groups.items()):
     p99 = delays[int((len(delays)-1)*0.99)]
     mx  = max(delays)
     
-    # Calculate drop rate for TSN flows
-    drop_rate = 0.0
-    if kind == "TSN" and fid in expected and expected[fid] > 0:
-        drop_rate = 100.0 * (expected[fid] - len(delays)) / expected[fid]
+    # Count anomaly packets: delay > threshold
+    anomaly = sum(1 for d in delays if d > threshold_us)
+    anomaly_str = f"{anomaly}(>{threshold_us}us)"
     
-    print(f"{sess:8s}  {kind:>6s}  {fid:>4d}  {qid:>4d}  {len(delays):>6d}  "
-          f"{avg:>8.0f}  {p50:>8.0f}  {p95:>8.0f}  {p99:>8.0f}  {mx:>8.0f}  {drop_rate:>6.1f}")
+    print(f"{sess:8s}  {kind:>6s}  {fid:>4d}  {len(delays):>6d}  "
+          f"{avg:>8.0f}  {p50:>8.0f}  {p95:>8.0f}  {p99:>8.0f}  {mx:>8.0f}   {anomaly_str}")
 PYEOF
 done
+
+# Slot stack summary
+step "Slot Stack Summary"
+python3 ~/tsn-lab/scripts/slot_stack_summary.py "$RESULT_DIR"
+echo ""
 
 # Switch logs
 step "Switch Scheduling Stats"
@@ -183,8 +208,8 @@ for sw in s1 s2 s3 s4 s5 s6; do
     [[ -f "$log" ]] || log="/tmp/${sw}-simple-switch-grpc.log"
     if [[ -f "$log" ]]; then
         cp "$log" "$RESULT_DIR/"
-        enq=$(grep -c 'TSN_QUEUE.*enqueue' "$log" 2>/dev/null || echo 0)
-        deq=$(grep -c 'TSN_GCL.*dequeue\|TSN_QUEUE.*dequeue' "$log" 2>/dev/null || echo 0)
+        enq=$(grep -c 'CSQF_ENQUEUE\|TSN_QUEUE.*enqueue' "$log" 2>/dev/null || echo 0)
+        deq=$(grep -c 'CSQF_DEQUEUE\|TSN_GCL.*dequeue\|CSQF dequeue' "$log" 2>/dev/null || echo 0)
         printf "%-6s  %8s  %8s\n" "$sw" "$enq" "$deq"
     else
         printf "%-6s  %8s  %8s\n" "$sw" "-" "-"
