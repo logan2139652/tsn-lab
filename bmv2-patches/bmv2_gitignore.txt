@@ -1,0 +1,20 @@
+# Ignore all generated/build files
+*.o
+*.lo
+*.la
+*.a
+*.so
+*.pb.cc
+*.pb.h
+.libs/
+.deps/
+Makefile
+Makefile.in
+autom4te.cache/
+stamp-*
+config.*
+.dirstamp
+*~
+*.swp
+*.pyc
+__pycache__/
