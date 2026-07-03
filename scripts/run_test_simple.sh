@@ -64,6 +64,7 @@ python3 ~/tsn-lab/python-controller/controller_from_json.py \
 ok "Controller done"
 sleep 1
 
+# TCQF cycle map programmingif grep -q "tcqf" "$CONFIG" 2>/dev/null; then    step "TCQF cycle remap table"    python3 ~/tsn-lab/scripts/tcqf_table_program.py "$CONFIG"    ok "TCQF cycle remap tables programmed"    sleep 1fi
 # Step 4: traffic
 step "Step 4/5: Start receivers (h3, h4)"
 sudo ip netns exec h3 python3 ~/tsn-lab/traffic/recv_from_json.py \
@@ -194,11 +195,6 @@ for (kind, fid), delays in sorted(groups.items()):
 PYEOF
 done
 
-# Slot stack summary
-step "Slot Stack Summary"
-python3 ~/tsn-lab/scripts/slot_stack_summary.py "$RESULT_DIR"
-echo ""
-
 # Switch logs
 step "Switch Scheduling Stats"
 echo "SW      ENQUEUE    DEQUEUE"
@@ -208,8 +204,8 @@ for sw in s1 s2 s3 s4 s5 s6; do
     [[ -f "$log" ]] || log="/tmp/${sw}-simple-switch-grpc.log"
     if [[ -f "$log" ]]; then
         cp "$log" "$RESULT_DIR/"
-        enq=$(grep -c 'CSQF_ENQUEUE\|TSN_QUEUE.*enqueue' "$log" 2>/dev/null || echo 0)
-        deq=$(grep -c 'CSQF_DEQUEUE\|TSN_GCL.*dequeue\|CSQF dequeue' "$log" 2>/dev/null || echo 0)
+        enq=$(grep -c 'TCQF_ENQUEUE\|TSN_QUEUE.*enqueue' "$log" 2>/dev/null || echo 0)
+        deq=$(grep -c 'TCQF_DEQUEUE\|TSN_GCL.*dequeue' "$log" 2>/dev/null || echo 0)
         printf "%-6s  %8s  %8s\n" "$sw" "$enq" "$deq"
     else
         printf "%-6s  %8s  %8s\n" "$sw" "-" "-"

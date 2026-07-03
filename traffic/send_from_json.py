@@ -13,12 +13,9 @@ class TSN(Packet):
     fields_desc = [
         ShortField("next_type", 0x0800),
         ShortField("fid", 0),
-        ByteField("hop_index", 0),
-        ByteField("path_len", 4),
-        ByteField("slot0", 0),
-        ByteField("slot1", 0),
-        ByteField("slot2", 0),
-        ByteField("slot3", 0),
+        ByteField("kind", 1),
+        ByteField("cycle_tag", 0),
+        ByteField("ttl", 32),
         ByteField("flags", 0),
     ]
 
@@ -68,16 +65,15 @@ def read_bmv2_cycle_base_ns(path, max_age_ms):
     return cycle_base_ns, cycle_ns, cycle_group
 
 def make_pkt(src_mac, dst_mac, src_ip, dst_ip,
-             fid, path_len, slot0, slot1, slot2, slot3,
-             kind, seq, payload_size):
+             fid, kind, cycle_tag, seq, payload_size):
     send_ns = time.time_ns()
     app = APP_HDR.pack(b"TSN1", fid, kind, seq, send_ns)
     payload = app + b"x" * max(0, payload_size - len(app))
 
     return (
         Ether(src=src_mac, dst=dst_mac, type=0x1234)
-        / TSN(next_type=0x0800, fid=fid, hop_index=0, path_len=path_len,
-              slot0=slot0, slot1=slot1, slot2=slot2, slot3=slot3, flags=0)
+        / TSN(next_type=0x0800, fid=fid, kind=kind,
+              cycle_tag=cycle_tag, ttl=32, flags=0)
         / IP(src=src_ip, dst=dst_ip)
         / UDP(sport=10000 + fid, dport=4321)
         / Raw(payload)
@@ -114,21 +110,13 @@ def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns,
 
             wait_until(send_time_ns)
 
-            # CSQF v2: slot stack generation
-            path_len = session.get("path_len", 4)
-            slots_per_cycle = cfg["tsn"].get("slots_per_cycle", 8)
-            hop_slot_offsets = session.get("hop_slot_offsets", [0, 1, 2, 3])
-
-            slot_list = [
-                (slot_id + offset) % slots_per_cycle
-                for offset in hop_slot_offsets
-            ]
-            s0, s1, s2, s3 = slot_list[:4]
+            # TCQF v1: init_cycle from config
+            init_cycle = session.get("init_cycle", 0)
 
             pkt = make_pkt(src_mac, dst_mac,
                 src_ip, dst_ip,
-                fid, path_len, s0, s1, s2, s3,
-                KIND_TSN, seq[fid],
+                fid, KIND_TSN, init_cycle,
+                seq[fid],
                 session.get("tsn_payload", 300),
             )
             sock.send(pkt)
@@ -152,8 +140,8 @@ def background_sender(args, cfg, session, bg_flow, start_ns, stop_ns):
         pkt = make_pkt(
             src_mac, dst_mac,
             src_ip, dst_ip,
-            bg_flow["fid"], 0, 7, 7, 7, 7,
-            KIND_BG, seq,
+            bg_flow["fid"], KIND_BG, 7,
+            seq,
             session.get("bg_payload", 1200),
         )
         sock.send(pkt)
