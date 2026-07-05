@@ -13,12 +13,9 @@ class TSN(Packet):
     fields_desc = [
         ShortField("next_type", 0x0800),
         ShortField("fid", 0),
-        ByteField("hop_index", 0),
-        ByteField("path_len", 4),
-        ByteField("slot0", 0),
-        ByteField("slot1", 0),
-        ByteField("slot2", 0),
-        ByteField("slot3", 0),
+        ByteField("kind", 1),
+        ByteField("cycle_tag", 0),
+        ByteField("ttl", 32),
         ByteField("flags", 0),
     ]
 
@@ -75,12 +72,8 @@ def handle(pkt):
         "recv_ns": recv_ns,
         "kind": kind_name,
         "fid": fid,
-        "hop_index": tsn_hdr.hop_index if tsn_hdr else -1,
-        "path_len": tsn_hdr.path_len if tsn_hdr else -1,
-        "slot0": tsn_hdr.slot0 if tsn_hdr else -1,
-        "slot1": tsn_hdr.slot1 if tsn_hdr else -1,
-        "slot2": tsn_hdr.slot2 if tsn_hdr else -1,
-        "slot3": tsn_hdr.slot3 if tsn_hdr else -1,
+        "cycle_tag": tsn_hdr.cycle_tag if tsn_hdr else -1,
+        "ttl": tsn_hdr.ttl if tsn_hdr else -1,
         "flags": tsn_hdr.flags if tsn_hdr else -1,
         "seq": seq,
         "delay_us": f"{delay_us:.3f}",
@@ -125,8 +118,7 @@ def main():
             f,
             fieldnames=[
                 "recv_ns", "kind", "fid",
-                "hop_index", "path_len",
-                "slot0", "slot1", "slot2", "slot3",
+                "cycle_tag", "ttl",
                 "flags", "seq", "delay_us",
             ],
         )

@@ -31,8 +31,7 @@ parser parser_impl(packet_in packet,
         local_metadata.next_hop_id = 0;
         local_metadata.is_tsn = 1w0;
         local_metadata.fid = 0;
-        local_metadata.hop_index = 0;
-        local_metadata.target_slot = 0;
+        local_metadata.cycle_tag = 0;
         local_metadata.base_queue = 0;
 
 
@@ -61,7 +60,7 @@ parser parser_impl(packet_in packet,
 
         local_metadata.is_tsn = 1w1;
         local_metadata.fid = hdr.tsn.fid;
-        local_metadata.hop_index = hdr.tsn.hop_index;
+        local_metadata.cycle_tag = hdr.tsn.cycle_tag;
 
         transition select(hdr.tsn.next_type) {
             ETH_TYPE_IPV4: parse_ipv4;

@@ -2,7 +2,7 @@
 import csv, sys, os
 
 result_dir = sys.argv[1]
-print("SESSION    FID   SLOT_STACK          COUNT   ANOMALY")
+print("SESSION    FID   TAG/SLOT            COUNT   ANOMALY")
 print("-" * 56)
 for f in sorted(os.listdir(result_dir)):
     if not f.startswith("tsn_recv_") or not f.endswith(".csv"):
@@ -16,9 +16,14 @@ for f in sorted(os.listdir(result_dir)):
             if row["kind"] != "TSN":
                 continue
             fid = int(row["fid"])
-            ss = "[%s,%s,%s,%s]" % (row.get("slot0","?"), row.get("slot1","?"), row.get("slot2","?"), row.get("slot3","?"))
-            key = (fid, ss)
+            if "cycle_tag" in row:
+                tag = "cycle=%s" % row.get("cycle_tag", "?")
+            else:
+                tag = "[%s,%s,%s,%s]" % (
+                    row.get("slot0","?"), row.get("slot1","?"),
+                    row.get("slot2","?"), row.get("slot3","?"))
+            key = (fid, tag)
             groups.setdefault(key, []).append(float(row["delay_us"]))
-    for (fid, ss), delays in sorted(groups.items()):
+    for (fid, tag), delays in sorted(groups.items()):
         anomaly = sum(1 for d in delays if d > 60000)
-        print("%s  %4d  %18s  %6d  %8d" % (sess, fid, ss, len(delays), anomaly))
+        print("%s  %4d  %18s  %6d  %8d" % (sess, fid, tag, len(delays), anomaly))

@@ -24,28 +24,36 @@ control tsn_queue_control(inout headers_t hdr,
                           inout local_metadata_t local_metadata,
                           inout standard_metadata_t standard_metadata) {
 
-    action select_target_slot() {
-        if (hdr.tsn.hop_index == 8w0) {
-            local_metadata.target_slot = hdr.tsn.slot0;
-        } else if (hdr.tsn.hop_index == 8w1) {
-            local_metadata.target_slot = hdr.tsn.slot1;
-        } else if (hdr.tsn.hop_index == 8w2) {
-            local_metadata.target_slot = hdr.tsn.slot2;
+    action remap_tsn_cycle() {
+        if (hdr.tsn.cycle_tag == 8w0) {
+            hdr.tsn.cycle_tag = 8w1;
+        } else if (hdr.tsn.cycle_tag == 8w1) {
+            hdr.tsn.cycle_tag = 8w2;
+        } else if (hdr.tsn.cycle_tag == 8w2) {
+            hdr.tsn.cycle_tag = 8w4;
+        } else if (hdr.tsn.cycle_tag == 8w3) {
+            hdr.tsn.cycle_tag = 8w4;
+        } else if (hdr.tsn.cycle_tag == 8w4) {
+            hdr.tsn.cycle_tag = 8w5;
+        } else if (hdr.tsn.cycle_tag == 8w5) {
+            hdr.tsn.cycle_tag = 8w6;
         } else {
-            local_metadata.target_slot = hdr.tsn.slot3;
+            hdr.tsn.cycle_tag = 8w0;
         }
+        local_metadata.cycle_tag = hdr.tsn.cycle_tag;
     }
 
-    action set_base_queue() {
-        if (local_metadata.target_slot[2:0] == 3w0 ||
-            local_metadata.target_slot[2:0] == 3w3 ||
-            local_metadata.target_slot[2:0] == 3w6) {
+    action set_base_queue_from_cycle() {
+        if (hdr.tsn.kind == 8w2) {
+            local_metadata.base_queue = 8w0;
+        } else if (hdr.tsn.cycle_tag[2:0] == 3w0 ||
+                   hdr.tsn.cycle_tag[2:0] == 3w4) {
             local_metadata.base_queue = 8w1;
-        } else if (local_metadata.target_slot[2:0] == 3w1 ||
-                   local_metadata.target_slot[2:0] == 3w4) {
+        } else if (hdr.tsn.cycle_tag[2:0] == 3w1 ||
+                   hdr.tsn.cycle_tag[2:0] == 3w5) {
             local_metadata.base_queue = 8w2;
-        } else if (local_metadata.target_slot[2:0] == 3w2 ||
-                   local_metadata.target_slot[2:0] == 3w5) {
+        } else if (hdr.tsn.cycle_tag[2:0] == 3w2 ||
+                   hdr.tsn.cycle_tag[2:0] == 3w6) {
             local_metadata.base_queue = 8w3;
         } else {
             local_metadata.base_queue = 8w0;
@@ -64,18 +72,13 @@ control tsn_queue_control(inout headers_t hdr,
         }
     }
 
-    action advance_hop_index() {
-        if (hdr.tsn.hop_index < hdr.tsn.path_len) {
-            hdr.tsn.hop_index = hdr.tsn.hop_index + 8w1;
-        }
-    }
-
     apply {
         if (hdr.tsn.isValid()) {
-            select_target_slot();
-            set_base_queue();
+            if (hdr.tsn.kind != 8w2) {
+                remap_tsn_cycle();
+            }
+            set_base_queue_from_cycle();
             set_priority_from_queue();
-            advance_hop_index();
         } else {
             standard_metadata.priority = 3w7;
         }
@@ -87,7 +90,7 @@ control tsn_debug_egress_control(inout headers_t hdr,
                                  inout standard_metadata_t standard_metadata) {
     apply {
         if (hdr.tsn.isValid()) {
-            hdr.tsn.flags = local_metadata.target_slot;
+            hdr.tsn.flags = hdr.tsn.cycle_tag;
         }
     }
 }
