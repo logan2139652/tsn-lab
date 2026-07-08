@@ -208,8 +208,8 @@ for sw in s1 s2 s3 s4 s5 s6; do
     [[ -f "$log" ]] || log="/tmp/${sw}-simple-switch-grpc.log"
     if [[ -f "$log" ]]; then
         cp "$log" "$RESULT_DIR/"
-        enq=$(grep -c 'TCQF_ENQUEUE\|CSQF_ENQUEUE\|TSN_QUEUE.*enqueue' "$log" 2>/dev/null || echo 0)
-        deq=$(grep -c 'TCQF_DEQUEUE\|CSQF_DEQUEUE\|TSN_GCL.*dequeue\|CSQF dequeue' "$log" 2>/dev/null || echo 0)
+        enq=$(grep -c 'TQF_ENQUEUE\|TCQF_ENQUEUE\|CSQF_ENQUEUE\|TSN_QUEUE.*enqueue' "$log" 2>/dev/null || echo 0)
+        deq=$(grep -c 'TQF_DEQUEUE\|TCQF_DEQUEUE\|CSQF_DEQUEUE\|TSN_GCL.*dequeue\|CSQF dequeue' "$log" 2>/dev/null || echo 0)
         printf "%-6s  %8s  %8s\n" "$sw" "$enq" "$deq"
     else
         printf "%-6s  %8s  %8s\n" "$sw" "-" "-"

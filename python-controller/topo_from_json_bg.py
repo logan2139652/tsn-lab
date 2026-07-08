@@ -13,6 +13,12 @@ import signal
 import time
 
 
+DEFAULT_BMV2_SWITCH_BIN = (
+    "/home/aaa/Workspace/P4/behavioral-model-tqf-pow2/behavioral-model/"
+    "targets/simple_switch_grpc/simple_switch_grpc"
+)
+
+
 class Bmv2GrpcSwitch(Switch):
     def __init__(self, name, json_path, grpc_port, device_id,
                  gcl_path, phase_path, **kwargs):
@@ -27,6 +33,7 @@ class Bmv2GrpcSwitch(Switch):
         self.stdout_file = f"/tmp/{name}-stdout.log"
 
     def start(self, controllers):
+        switch_bin = os.environ.get("BMV2_SWITCH_BIN", DEFAULT_BMV2_SWITCH_BIN)
         intf_args = []
         for port, intf in self.intfs.items():
             if port == 0:
@@ -36,7 +43,7 @@ class Bmv2GrpcSwitch(Switch):
         cmd = (
             f"TSN_GCL_PATH={self.gcl_path} "
             f"TSN_PHASE_PATH={self.phase_path} "
-            f"simple_switch_grpc "
+            f"{switch_bin} "
             f"--device-id {self.device_id} "
             f"--log-file {self.log_file} "
             f"-L info --log-flush "

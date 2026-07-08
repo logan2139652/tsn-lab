@@ -24,39 +24,80 @@ control tsn_queue_control(inout headers_t hdr,
                           inout local_metadata_t local_metadata,
                           inout standard_metadata_t standard_metadata) {
 
-    action remap_tsn_cycle() {
-        if (hdr.tsn.cycle_tag == 8w0) {
-            hdr.tsn.cycle_tag = 8w1;
-        } else if (hdr.tsn.cycle_tag == 8w1) {
-            hdr.tsn.cycle_tag = 8w2;
-        } else if (hdr.tsn.cycle_tag == 8w2) {
-            hdr.tsn.cycle_tag = 8w4;
-        } else if (hdr.tsn.cycle_tag == 8w3) {
-            hdr.tsn.cycle_tag = 8w4;
-        } else if (hdr.tsn.cycle_tag == 8w4) {
-            hdr.tsn.cycle_tag = 8w5;
-        } else if (hdr.tsn.cycle_tag == 8w5) {
-            hdr.tsn.cycle_tag = 8w6;
-        } else {
-            hdr.tsn.cycle_tag = 8w0;
-        }
-        local_metadata.cycle_tag = hdr.tsn.cycle_tag;
+    action compute_arrival_slot() {
+        bit<48> ts;
+        ts = standard_metadata.ingress_global_timestamp;
+
+        /* TQF-pow2-slot:
+         * slot_us = 8192 = 2^13, slots_per_cycle = 8.
+         * arrival_slot = floor(timestamp / 8192) mod 8 = ts[15:13].
+         */
+        local_metadata.arrival_slot = (bit<8>) ts[15:13];
     }
 
-    action set_base_queue_from_cycle() {
-        if (hdr.tsn.kind == 8w2) {
-            local_metadata.base_queue = 8w0;
-        } else if (hdr.tsn.cycle_tag[2:0] == 3w0 ||
-                   hdr.tsn.cycle_tag[2:0] == 3w4) {
-            local_metadata.base_queue = 8w1;
-        } else if (hdr.tsn.cycle_tag[2:0] == 3w1 ||
-                   hdr.tsn.cycle_tag[2:0] == 3w5) {
-            local_metadata.base_queue = 8w2;
-        } else if (hdr.tsn.cycle_tag[2:0] == 3w2 ||
-                   hdr.tsn.cycle_tag[2:0] == 3w6) {
-            local_metadata.base_queue = 8w3;
+    action assign_out_slot_d1() {
+        if (local_metadata.arrival_slot == 8w0) {
+            local_metadata.out_slot = 8w1;
+        } else if (local_metadata.arrival_slot == 8w1) {
+            local_metadata.out_slot = 8w2;
+        } else if (local_metadata.arrival_slot == 8w2) {
+            local_metadata.out_slot = 8w3;
+        } else if (local_metadata.arrival_slot == 8w3) {
+            local_metadata.out_slot = 8w4;
+        } else if (local_metadata.arrival_slot == 8w4) {
+            local_metadata.out_slot = 8w5;
+        } else if (local_metadata.arrival_slot == 8w5) {
+            local_metadata.out_slot = 8w6;
+        } else if (local_metadata.arrival_slot == 8w6) {
+            local_metadata.out_slot = 8w7;
         } else {
+            local_metadata.out_slot = 8w0;
+        }
+
+        hdr.tsn.cycle_tag = local_metadata.out_slot;
+        hdr.tsn.flags = local_metadata.arrival_slot;
+    }
+
+    action assign_out_slot_d2() {
+        if (local_metadata.arrival_slot == 8w0) {
+            local_metadata.out_slot = 8w2;
+        } else if (local_metadata.arrival_slot == 8w1) {
+            local_metadata.out_slot = 8w3;
+        } else if (local_metadata.arrival_slot == 8w2) {
+            local_metadata.out_slot = 8w4;
+        } else if (local_metadata.arrival_slot == 8w3) {
+            local_metadata.out_slot = 8w5;
+        } else if (local_metadata.arrival_slot == 8w4) {
+            local_metadata.out_slot = 8w6;
+        } else if (local_metadata.arrival_slot == 8w5) {
+            local_metadata.out_slot = 8w7;
+        } else if (local_metadata.arrival_slot == 8w6) {
+            local_metadata.out_slot = 8w0;
+        } else {
+            local_metadata.out_slot = 8w1;
+        }
+
+        hdr.tsn.cycle_tag = local_metadata.out_slot;
+        hdr.tsn.flags = local_metadata.arrival_slot;
+    }
+
+    action set_base_queue_from_out_slot() {
+        if (local_metadata.out_slot == 8w0) {
             local_metadata.base_queue = 8w0;
+        } else if (local_metadata.out_slot == 8w1) {
+            local_metadata.base_queue = 8w1;
+        } else if (local_metadata.out_slot == 8w2) {
+            local_metadata.base_queue = 8w2;
+        } else if (local_metadata.out_slot == 8w3) {
+            local_metadata.base_queue = 8w3;
+        } else if (local_metadata.out_slot == 8w4) {
+            local_metadata.base_queue = 8w4;
+        } else if (local_metadata.out_slot == 8w5) {
+            local_metadata.base_queue = 8w5;
+        } else if (local_metadata.out_slot == 8w6) {
+            local_metadata.base_queue = 8w6;
+        } else {
+            local_metadata.base_queue = 8w7;
         }
     }
 
@@ -67,17 +108,22 @@ control tsn_queue_control(inout headers_t hdr,
             standard_metadata.priority = 3w5;
         } else if (local_metadata.base_queue == 8w3) {
             standard_metadata.priority = 3w4;
+        } else if (local_metadata.base_queue == 8w4) {
+            standard_metadata.priority = 3w3;
+        } else if (local_metadata.base_queue == 8w5) {
+            standard_metadata.priority = 3w2;
+        } else if (local_metadata.base_queue == 8w6) {
+            standard_metadata.priority = 3w1;
         } else {
-            standard_metadata.priority = 3w7;
+            standard_metadata.priority = 3w0;
         }
     }
 
     apply {
         if (hdr.tsn.isValid()) {
-            if (hdr.tsn.kind != 8w2) {
-                remap_tsn_cycle();
-            }
-            set_base_queue_from_cycle();
+            compute_arrival_slot();
+            assign_out_slot_d1();
+            set_base_queue_from_out_slot();
             set_priority_from_queue();
         } else {
             standard_metadata.priority = 3w7;
@@ -90,7 +136,7 @@ control tsn_debug_egress_control(inout headers_t hdr,
                                  inout standard_metadata_t standard_metadata) {
     apply {
         if (hdr.tsn.isValid()) {
-            hdr.tsn.flags = hdr.tsn.cycle_tag;
+            hdr.tsn.flags = local_metadata.arrival_slot;
         }
     }
 }

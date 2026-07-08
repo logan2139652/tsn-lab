@@ -469,20 +469,20 @@ SimpleSwitch::enqueue(port_t egress_port, std::unique_ptr<Packet> &&packet) {
 
     size_t queue_idx = SSWITCH_PRIORITY_QUEUEING_NB_QUEUES - 1 - priority;
 
-    static constexpr uint64_t TSN_SLOT_US = 10000;  // 10 ms
+    static constexpr uint64_t TSN_SLOT_US = 8192;  // 2^13 us
     static constexpr uint64_t TSN_CYCLE_US =
         TSN_SLOT_US * SSWITCH_PRIORITY_QUEUEING_NB_QUEUES;
 
 
-    uint64_t now_us = tsn_monotonic_us();
+    uint64_t now_us = get_ts().count();
     size_t enqueue_slot_id =
-        (now_us / TSN_SLOT_US) % SSWITCH_PRIORITY_QUEUEING_NB_QUEUES;
+        static_cast<size_t>((now_us >> 13) & 0x7);
     
-    uint64_t phase_us = now_us % TSN_CYCLE_US;
-    uint64_t slot_offset_us = now_us % TSN_SLOT_US;
+    uint64_t phase_us = now_us & (TSN_CYCLE_US - 1);
+    uint64_t slot_offset_us = now_us & (TSN_SLOT_US - 1);
 
     bm::Logger::get()->info(
-        "CSQF_ENQUEUE now_us={} phase_us={} slot_offset_us={} "
+        "TQF_ENQUEUE now_us={} phase_us={} slot_offset_us={} "
         "enqueue_slot_id={} egress_port={} priority={} queue_idx={}",
         now_us, phase_us, slot_offset_us,
         enqueue_slot_id, egress_port, priority, queue_idx);
@@ -715,12 +715,11 @@ SimpleSwitch::egress_thread(size_t worker_id) {
 #ifdef SSWITCH_PRIORITY_QUEUEING_ON
     size_t queue_idx;
 
-    static constexpr uint64_t TSN_SLOT_US = 10000;  // 10 ms
-    // static constexpr int TSN_IDLE_QUEUE = -1;  // CSQF: unused
+    static constexpr uint64_t TSN_SLOT_US = 8192;  // 2^13 us
 
     static const std::array<int, SSWITCH_PRIORITY_QUEUEING_NB_QUEUES> TSN_GCL = []() {
         std::array<int, SSWITCH_PRIORITY_QUEUEING_NB_QUEUES> gcl =
-        {{1, 2, 3, 0, 1, 2, 3, 0}};
+        {{0, 1, 2, 3, 4, 5, 6, 7}};
 
         const char *gcl_env = std::getenv("TSN_GCL_PATH");
         const char *gcl_path = gcl_env ? gcl_env : "/tmp/tsn_gcl.txt";
@@ -769,17 +768,18 @@ SimpleSwitch::egress_thread(size_t worker_id) {
   }();
 
     while (true) {
-      // 只采样一次公共单调时钟，保证所有派生时间一致。
+      // Use BMv2 switch-relative time for GCL slot selection. This keeps the
+      // dequeue phase aligned with standard_metadata.ingress_global_timestamp.
       uint64_t mono_ns = tsn_monotonic_ns();
-      uint64_t now_us = mono_ns / 1000ull;
+      uint64_t now_us = get_ts().count();
       
       uint64_t cycle_us =
           TSN_SLOT_US * SSWITCH_PRIORITY_QUEUEING_NB_QUEUES;
 
-      uint64_t phase_us = now_us % cycle_us;
+      uint64_t phase_us = now_us & (cycle_us - 1);
       size_t slot_id =
-          static_cast<size_t>(phase_us / TSN_SLOT_US);
-      uint64_t slot_offset_us = phase_us % TSN_SLOT_US;
+          static_cast<size_t>((now_us >> 13) & 0x7);
+      uint64_t slot_offset_us = now_us & (TSN_SLOT_US - 1);
 
       // 每隔约 5ms 更新一次当前交换机的 phase 文件。
       static std::atomic<uint64_t> last_phase_write_us{0};
@@ -801,25 +801,21 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             cycle_group);
       }
 
-      // CSQF v2: TSN first, BE fallback
+      // TQF-pow2: each slot dequeues only its corresponding queue.
       int base_queue = TSN_GCL[slot_id];
       bool popped = false;
 
-      if (base_queue >= 1 && base_queue <= 3) {
+      if (base_queue >= 0 &&
+          base_queue < static_cast<int>(SSWITCH_PRIORITY_QUEUEING_NB_QUEUES)) {
         popped = egress_buffers.try_pop_back_priority(
             worker_id,
             static_cast<size_t>(base_queue),
-            &port, &queue_idx, &packet);
-      } else if (base_queue == 0) {
-        popped = egress_buffers.try_pop_back_priority(
-            worker_id,
-            static_cast<size_t>(0),
             &port, &queue_idx, &packet);
       }
 
       if (popped) {
         bm::Logger::get()->info(
-            "CSQF_DEQUEUE now_us={} slot_id={} base_queue={} "
+            "TQF_DEQUEUE now_us={} slot_id={} base_queue={} "
             "egress_port={} queue_idx={} priority={}",
             now_us,
             slot_id,

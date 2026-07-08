@@ -17,7 +17,11 @@ for f in sorted(os.listdir(result_dir)):
                 continue
             fid = int(row["fid"])
             if "cycle_tag" in row:
-                tag = "cycle=%s" % row.get("cycle_tag", "?")
+                if "flags" in row:
+                    tag = "out=%s arrival=%s" % (
+                        row.get("cycle_tag", "?"), row.get("flags", "?"))
+                else:
+                    tag = "cycle=%s" % row.get("cycle_tag", "?")
             else:
                 tag = "[%s,%s,%s,%s]" % (
                     row.get("slot0","?"), row.get("slot1","?"),

@@ -35,6 +35,18 @@ TCQF_PREV_SERVICE_CYCLE = {
     6: 5,
 }
 
+def detect_mechanism(cfg):
+    mechanism = cfg.get("mechanism")
+    if mechanism:
+        return mechanism.lower()
+    if cfg.get("tqf", {}).get("enabled"):
+        return "tqf"
+    if cfg.get("tcqf", {}).get("enabled"):
+        return "tcqf"
+    if cfg.get("csqf", {}).get("enabled"):
+        return "csqf"
+    return "basic"
+
 def wait_until(target_ns):
     while True:
         remain_ns = target_ns - time.monotonic_ns()
@@ -89,7 +101,7 @@ def make_pkt(src_mac, dst_mac, src_ip, dst_ip,
         / Raw(payload)
     )
 
-def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns, slot_ns, cycle_group):
+def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns, slot_ns, cycle_group, mechanism):
     
     src_mac, dst_mac, src_ip, dst_ip = get_sender_addrs(cfg, session)
 
@@ -120,10 +132,16 @@ def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns,
 
             wait_until(send_time_ns)
 
-            # TCQF: packet carries only a cycle tag. The first switch remaps
-            # predecessor(slot_id) -> slot_id, then each hop advances to the
-            # next TSN service cycle while skipping BE cycles.
-            cycle_tag = TCQF_PREV_SERVICE_CYCLE.get(slot_id % 8, 6)
+            if mechanism == "tqf":
+                # TQF-pow2: scheduling is based on the switch-local
+                # arrival timestamp. Sender-provided cycle_tag is debug-only
+                # and must not decide the queue.
+                cycle_tag = 0
+            else:
+                # TCQF: packet carries only a cycle tag. The first switch
+                # remaps predecessor(slot_id) -> slot_id, then each hop
+                # advances to the next service cycle.
+                cycle_tag = TCQF_PREV_SERVICE_CYCLE.get(slot_id % 8, 6)
 
             pkt = make_pkt(src_mac, dst_mac,
                 src_ip, dst_ip,
@@ -136,7 +154,7 @@ def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns,
 
         cycle += 1
 
-def background_sender(args, cfg, session, bg_flow, start_ns, stop_ns):
+def background_sender(args, cfg, session, bg_flow, start_ns, stop_ns, mechanism):
     if not bg_flow or args.bg_pps <= 0:
         return
 
@@ -152,7 +170,7 @@ def background_sender(args, cfg, session, bg_flow, start_ns, stop_ns):
         pkt = make_pkt(
             src_mac, dst_mac,
             src_ip, dst_ip,
-            bg_flow["fid"], bg_flow.get("cycle_tag", 3),
+            bg_flow["fid"], 0 if mechanism == "tqf" else bg_flow.get("cycle_tag", 3),
             KIND_BG, seq,
             session.get("bg_payload", 1200),
         )
@@ -211,6 +229,7 @@ def main():
 
     with open(args.config) as f:
         cfg = json.load(f)
+    mechanism = detect_mechanism(cfg)
         
     session = cfg["traffic"]["sessions"][args.session]
     sender_cfg = session["sender"]
@@ -244,12 +263,13 @@ def main():
     print(f"config={args.config}")
     print(f"sync_switch={sync_switch}, sync_file={sync_file}")
     print(f"lead_us={args.lead_us}, phase_offset_us={args.phase_offset_us}")
+    print(f"mechanism={mechanism}")
     print(f"events={events}")
     print(f"background={bg_flow}, bg_pps={args.bg_pps}")
 
-    bg = threading.Thread(target=background_sender, args=(args, cfg, session, bg_flow, start_ns, stop_ns))
+    bg = threading.Thread(target=background_sender, args=(args, cfg, session, bg_flow, start_ns, stop_ns, mechanism))
     bg.start()
-    tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns, slot_ns, cycle_group)
+    tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns, slot_ns, cycle_group, mechanism)
     bg.join()
 
     print("done")
