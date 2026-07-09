@@ -801,11 +801,14 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             cycle_group);
       }
 
-      // TQF-pow2: each slot dequeues only its corresponding queue.
+      // TQF with BE fallback: serve the TSN queue for the current slot first;
+      // if it is empty, use the slot gap to send one BE packet from queue 0.
       int base_queue = TSN_GCL[slot_id];
       bool popped = false;
+      bool be_fallback = false;
+      bool allow_be_fallback = (slot_id == 0 || slot_id == 4);
 
-      if (base_queue >= 0 &&
+      if (base_queue > 0 &&
           base_queue < static_cast<int>(SSWITCH_PRIORITY_QUEUEING_NB_QUEUES)) {
         popped = egress_buffers.try_pop_back_priority(
             worker_id,
@@ -813,13 +816,22 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             &port, &queue_idx, &packet);
       }
 
+      if (!popped && allow_be_fallback) {
+        popped = egress_buffers.try_pop_back_priority(
+            worker_id,
+            static_cast<size_t>(0),
+            &port, &queue_idx, &packet);
+        be_fallback = popped;
+      }
+
       if (popped) {
         bm::Logger::get()->info(
-            "TQF_DEQUEUE now_us={} slot_id={} base_queue={} "
+            "TQF_DEQUEUE now_us={} slot_id={} base_queue={} be_fallback={} "
             "egress_port={} queue_idx={} priority={}",
             now_us,
             slot_id,
             base_queue,
+            be_fallback,
             port,
             queue_idx,
             SSWITCH_PRIORITY_QUEUEING_NB_QUEUES - 1 - queue_idx);

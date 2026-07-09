@@ -51,7 +51,10 @@ control tsn_queue_control(inout headers_t hdr,
         } else if (local_metadata.arrival_slot == 8w6) {
             local_metadata.out_slot = 8w7;
         } else {
-            local_metadata.out_slot = 8w0;
+            /* Queue 0 is reserved for BE fallback. A packet that would wrap
+             * from slot 7 to slot 0 is deferred to the next TSN slot instead.
+             */
+            local_metadata.out_slot = 8w1;
         }
 
         hdr.tsn.cycle_tag = local_metadata.out_slot;
@@ -101,8 +104,18 @@ control tsn_queue_control(inout headers_t hdr,
         }
     }
 
+    action set_be_queue() {
+        local_metadata.arrival_slot = 8w0;
+        local_metadata.out_slot = 8w0;
+        local_metadata.base_queue = 8w0;
+        hdr.tsn.cycle_tag = 8w0;
+        hdr.tsn.flags = 8w0;
+    }
+
     action set_priority_from_queue() {
-        if (local_metadata.base_queue == 8w1) {
+        if (local_metadata.base_queue == 8w0) {
+            standard_metadata.priority = 3w7;
+        } else if (local_metadata.base_queue == 8w1) {
             standard_metadata.priority = 3w6;
         } else if (local_metadata.base_queue == 8w2) {
             standard_metadata.priority = 3w5;
@@ -120,12 +133,15 @@ control tsn_queue_control(inout headers_t hdr,
     }
 
     apply {
-        if (hdr.tsn.isValid()) {
+        if (hdr.tsn.isValid() && hdr.tsn.kind == 8w1) {
             compute_arrival_slot();
             assign_out_slot_d1();
             set_base_queue_from_out_slot();
             set_priority_from_queue();
         } else {
+            if (hdr.tsn.isValid()) {
+                set_be_queue();
+            }
             standard_metadata.priority = 3w7;
         }
     }
