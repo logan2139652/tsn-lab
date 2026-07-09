@@ -1,0 +1,529 @@
+{
+  "p4": {
+    "bmv2_json": "/home/aaa/tsn-lab/build/tsn_basic.json",
+    "p4info": "/home/aaa/tsn-lab/build/tsn_basic.p4info.txt"
+  },
+  "pipeline": {
+    "table": "ingress.table0_control.table0",
+    "action": "ingress.table0_control.set_egress_port",
+    "port_param": "port",
+    "match_fields": {
+      "in_port": "standard_metadata.ingress_port",
+      "eth_src": "hdr.ethernet.src_addr",
+      "eth_dst": "hdr.ethernet.dst_addr"
+    }
+  },
+  "switches": {
+    "s1": {
+      "device_id": 1,
+      "grpc_port": 50051,
+      "gcl": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        1,
+        0
+      ],
+      "gcl_path": "/tmp/tsn_gcl_s1.txt",
+      "phase_path": "/tmp/tsn_phase_s1.txt"
+    },
+    "s2": {
+      "device_id": 2,
+      "grpc_port": 50052,
+      "gcl": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        1,
+        0
+      ],
+      "gcl_path": "/tmp/tsn_gcl_s2.txt",
+      "phase_path": "/tmp/tsn_phase_s2.txt"
+    },
+    "s3": {
+      "device_id": 3,
+      "grpc_port": 50053,
+      "gcl": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        1,
+        0
+      ],
+      "gcl_path": "/tmp/tsn_gcl_s3.txt",
+      "phase_path": "/tmp/tsn_phase_s3.txt"
+    },
+    "s4": {
+      "device_id": 4,
+      "grpc_port": 50054,
+      "gcl": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        1,
+        0
+      ],
+      "gcl_path": "/tmp/tsn_gcl_s4.txt",
+      "phase_path": "/tmp/tsn_phase_s4.txt"
+    },
+    "s5": {
+      "device_id": 5,
+      "grpc_port": 50055,
+      "gcl": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        1,
+        0
+      ],
+      "gcl_path": "/tmp/tsn_gcl_s5.txt",
+      "phase_path": "/tmp/tsn_phase_s5.txt"
+    },
+    "s6": {
+      "device_id": 6,
+      "grpc_port": 50056,
+      "gcl": [
+        1,
+        2,
+        3,
+        1,
+        2,
+        3,
+        1,
+        0
+      ],
+      "gcl_path": "/tmp/tsn_gcl_s6.txt",
+      "phase_path": "/tmp/tsn_phase_s6.txt"
+    }
+  },
+  "hosts": {
+    "h1": {
+      "ip": "10.0.0.1/24",
+      "mac": "00:00:00:00:00:01"
+    },
+    "h2": {
+      "ip": "10.0.0.2/24",
+      "mac": "00:00:00:00:00:02"
+    },
+    "h3": {
+      "ip": "10.0.0.3/24",
+      "mac": "00:00:00:00:00:03"
+    },
+    "h4": {
+      "ip": "10.0.0.4/24",
+      "mac": "00:00:00:00:00:04"
+    }
+  },
+  "links": [
+    {
+      "node1": "h1",
+      "node2": "s1",
+      "port2": 1,
+      "bw": 100
+    },
+    {
+      "node1": "h2",
+      "node2": "s1",
+      "port2": 2,
+      "bw": 100
+    },
+    {
+      "node1": "s1",
+      "node2": "s2",
+      "port1": 3,
+      "port2": 1,
+      "bw": 100
+    },
+    {
+      "node1": "s1",
+      "node2": "s3",
+      "port1": 4,
+      "port2": 1,
+      "bw": 100
+    },
+    {
+      "node1": "s2",
+      "node2": "s3",
+      "port1": 2,
+      "port2": 2,
+      "bw": 100
+    },
+    {
+      "node1": "s3",
+      "node2": "s4",
+      "port1": 3,
+      "port2": 1,
+      "bw": 100
+    },
+    {
+      "node1": "s4",
+      "node2": "s5",
+      "port1": 2,
+      "port2": 2,
+      "bw": 100
+    },
+    {
+      "node1": "s5",
+      "node2": "s2",
+      "port1": 1,
+      "port2": 3,
+      "bw": 100
+    },
+    {
+      "node1": "s4",
+      "node2": "s6",
+      "port1": 3,
+      "port2": 1,
+      "bw": 100
+    },
+    {
+      "node1": "s5",
+      "node2": "s6",
+      "port1": 3,
+      "port2": 2,
+      "bw": 100
+    },
+    {
+      "node1": "h3",
+      "node2": "s6",
+      "port2": 3,
+      "bw": 100
+    },
+    {
+      "node1": "h4",
+      "node2": "s6",
+      "port2": 4,
+      "bw": 100
+    }
+  ],
+  "routes": {
+    "s1": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:01",
+        "dst_mac": "00:00:00:00:00:03",
+        "out_port": 3,
+        "priority": 10
+      },
+      {
+        "in_port": 3,
+        "src_mac": "00:00:00:00:00:03",
+        "dst_mac": "00:00:00:00:00:01",
+        "out_port": 1,
+        "priority": 10
+      },
+      {
+        "in_port": 2,
+        "src_mac": "00:00:00:00:00:02",
+        "dst_mac": "00:00:00:00:00:04",
+        "out_port": 4,
+        "priority": 10
+      },
+      {
+        "in_port": 4,
+        "src_mac": "00:00:00:00:00:04",
+        "dst_mac": "00:00:00:00:00:02",
+        "out_port": 2,
+        "priority": 10
+      }
+    ],
+    "s2": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:01",
+        "dst_mac": "00:00:00:00:00:03",
+        "out_port": 3,
+        "priority": 10
+      },
+      {
+        "in_port": 3,
+        "src_mac": "00:00:00:00:00:03",
+        "dst_mac": "00:00:00:00:00:01",
+        "out_port": 1,
+        "priority": 10
+      }
+    ],
+    "s3": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:02",
+        "dst_mac": "00:00:00:00:00:04",
+        "out_port": 3,
+        "priority": 10
+      },
+      {
+        "in_port": 3,
+        "src_mac": "00:00:00:00:00:04",
+        "dst_mac": "00:00:00:00:00:02",
+        "out_port": 1,
+        "priority": 10
+      }
+    ],
+    "s4": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:02",
+        "dst_mac": "00:00:00:00:00:04",
+        "out_port": 3,
+        "priority": 10
+      },
+      {
+        "in_port": 3,
+        "src_mac": "00:00:00:00:00:04",
+        "dst_mac": "00:00:00:00:00:02",
+        "out_port": 1,
+        "priority": 10
+      }
+    ],
+    "s5": [
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:01",
+        "dst_mac": "00:00:00:00:00:03",
+        "out_port": 3,
+        "priority": 10
+      },
+      {
+        "in_port": 3,
+        "src_mac": "00:00:00:00:00:03",
+        "dst_mac": "00:00:00:00:00:01",
+        "out_port": 1,
+        "priority": 10
+      }
+    ],
+    "s6": [
+      {
+        "in_port": 2,
+        "src_mac": "00:00:00:00:00:01",
+        "dst_mac": "00:00:00:00:00:03",
+        "out_port": 3,
+        "priority": 10
+      },
+      {
+        "in_port": 3,
+        "src_mac": "00:00:00:00:00:03",
+        "dst_mac": "00:00:00:00:00:01",
+        "out_port": 2,
+        "priority": 10
+      },
+      {
+        "in_port": 1,
+        "src_mac": "00:00:00:00:00:02",
+        "dst_mac": "00:00:00:00:00:04",
+        "out_port": 4,
+        "priority": 10
+      },
+      {
+        "in_port": 4,
+        "src_mac": "00:00:00:00:00:04",
+        "dst_mac": "00:00:00:00:00:02",
+        "out_port": 1,
+        "priority": 10
+      }
+    ]
+  },
+  "tsn": {
+    "sync_switch": "s1",
+    "slot_us": 10000,
+    "cycle_us": 80000,
+    "lead_us": 5000,
+    "phase_offset_us": 0,
+    "slots_per_cycle": 8
+  },
+  "traffic": {
+    "sessions": {
+      "h1_h3": {
+        "sender": {
+          "host": "h1",
+          "iface": "h1-eth0"
+        },
+        "receiver": {
+          "host": "h3",
+          "iface": "h3-eth0",
+          "duration": 30,
+          "csv": "/tmp/tsn_recv_h1_h3.csv"
+        },
+        "duration": 10,
+        "start_delay": 0.2,
+        "tsn_payload": 300,
+        "bg_payload": 1200,
+        "bg_pps": 50,
+        "flows": [
+          {
+            "fid": 101,
+            "qid": 6,
+            "queue": 1,
+            "slots": [
+              0,
+              4
+            ],
+            "type": "tsn"
+          },
+          {
+            "fid": 102,
+            "qid": 5,
+            "queue": 2,
+            "slots": [
+              1,
+              5
+            ],
+            "type": "tsn"
+          },
+          {
+            "fid": 103,
+            "qid": 4,
+            "queue": 3,
+            "slots": [
+              2,
+              6
+            ],
+            "type": "tsn"
+          },
+          {
+            "fid": 200,
+            "qid": 7,
+            "queue": 0,
+            "type": "background",
+            "cycle_tag": 7
+          }
+        ],
+        "path": [
+          "s1",
+          "s2",
+          "s5",
+          "s6"
+        ],
+        "hop_slot_offsets": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "path_len": 4
+      },
+      "h2_h4": {
+        "sender": {
+          "host": "h2",
+          "iface": "h2-eth0"
+        },
+        "receiver": {
+          "host": "h4",
+          "iface": "h4-eth0",
+          "duration": 30,
+          "csv": "/tmp/tsn_recv_h2_h4.csv"
+        },
+        "duration": 10,
+        "start_delay": 0.2,
+        "tsn_payload": 300,
+        "bg_payload": 1200,
+        "bg_pps": 50,
+        "flows": [
+          {
+            "fid": 201,
+            "qid": 6,
+            "queue": 1,
+            "slots": [
+              0,
+              4
+            ],
+            "type": "tsn"
+          },
+          {
+            "fid": 202,
+            "qid": 5,
+            "queue": 2,
+            "slots": [
+              1,
+              5
+            ],
+            "type": "tsn"
+          },
+          {
+            "fid": 203,
+            "qid": 4,
+            "queue": 3,
+            "slots": [
+              2,
+              6
+            ],
+            "type": "tsn"
+          },
+          {
+            "fid": 300,
+            "qid": 7,
+            "queue": 0,
+            "type": "background",
+            "cycle_tag": 7
+          }
+        ],
+        "path": [
+          "s1",
+          "s3",
+          "s4",
+          "s6"
+        ],
+        "hop_slot_offsets": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "path_len": 4
+      }
+    }
+  },
+  "tcqf": {
+    "enabled": true,
+    "cycle_len_us": 10000,
+    "cycle_count": 8,
+    "gcl": [
+      1,
+      2,
+      3,
+      1,
+      2,
+      3,
+      1,
+      0
+    ],
+    "be_cycles": [
+      7
+    ],
+    "service_cycles": [
+      0,
+      1,
+      2,
+      4,
+      5,
+      6
+    ],
+    "default_delta": 1,
+    "cycle_to_queue": {
+      "0": 1,
+      "1": 2,
+      "2": 3,
+      "3": 0,
+      "4": 1,
+      "5": 2,
+      "6": 3,
+      "7": 0
+    },
+    "strict_be": true,
+    "description": "TCQF strict-BE: BE/BG only served in slot 7"
+  }
+}
