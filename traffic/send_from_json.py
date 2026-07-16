@@ -23,6 +23,7 @@ bind_layers(Ether, TSN, type=0x1234)
 bind_layers(TSN, IP, next_type=0x0800)
 
 APP_HDR = struct.Struct("!4sHBIQ")
+CBQF_APP_HDR = struct.Struct("!4sHBIQBBB")
 KIND_TSN = 1
 KIND_BG = 2
 
@@ -41,6 +42,8 @@ def detect_mechanism(cfg):
         return mechanism.lower()
     if cfg.get("tqf", {}).get("enabled"):
         return "tqf"
+    if cfg.get("cbqf", {}).get("enabled"):
+        return "cbqf"
     if cfg.get("tcqf", {}).get("enabled"):
         return "tcqf"
     if cfg.get("csqf", {}).get("enabled"):
@@ -85,11 +88,39 @@ def read_bmv2_cycle_base_ns(path, max_age_ms):
     cycle_group = data.get("cycle_group", 0)
     return cycle_base_ns, cycle_ns, cycle_group
 
+def cbqf_cycle_tag_for_slot(cfg, slot_id, batch_no):
+    cbqf = cfg.get("cbqf", {})
+    tsn_cfg = cfg.get("tsn", {})
+    slots_per_cycle = int(cbqf.get(
+        "slots_per_cycle", tsn_cfg.get("slots_per_cycle", 8)))
+    release_delay_slots = int(cbqf.get("release_delay_slots", 1))
+    slot_service = cbqf.get("slot_service", [1, 2, 1, 2, 0, 2, 1, 0])
+
+    target_slot = (slot_id + release_delay_slots) % slots_per_cycle
+    target_queue = 0
+    for _ in range(slots_per_cycle):
+        target_queue = int(slot_service[target_slot % len(slot_service)])
+        if target_queue in (1, 2):
+            break
+        target_slot = (target_slot + 1) % slots_per_cycle
+    else:
+        target_queue = 1
+
+    target_parity = 0 if target_queue == 1 else 1
+    return ((batch_no << 1) & 0xfe) | target_parity
+
 def make_pkt(src_mac, dst_mac, src_ip, dst_ip,
              fid, cycle_tag,
-             kind, seq, payload_size):
+             kind, seq, payload_size,
+             batch_id=0, batch_seq=0, batch_size=1,
+             mechanism="basic"):
     send_ns = time.time_ns()
-    app = APP_HDR.pack(b"TSN1", fid, kind, seq, send_ns)
+    if mechanism == "cbqf":
+        app = CBQF_APP_HDR.pack(
+            b"TSN1", fid, kind, seq, send_ns,
+            batch_id & 0xff, batch_seq & 0xff, batch_size & 0xff)
+    else:
+        app = APP_HDR.pack(b"TSN1", fid, kind, seq, send_ns)
     payload = app + b"x" * max(0, payload_size - len(app))
 
     return (
@@ -116,6 +147,8 @@ def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns,
             slot_id = event["slot"]
             fid = event["fid"]
             qid = event["qid"]
+            batch_size = max(1, int(event.get("batch_size", 1)))
+            burst_gap_us = max(0, int(event.get("burst_gap_us", 0)))
             lead_us = event.get("lead_us")
             if lead_us is None:
                 lead_us = args.lead_us
@@ -132,7 +165,10 @@ def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns,
 
             wait_until(send_time_ns)
 
-            if mechanism == "tqf":
+            if mechanism == "cbqf":
+                batch_no = seq[fid] // batch_size
+                cycle_tag = cbqf_cycle_tag_for_slot(cfg, slot_id, batch_no)
+            elif mechanism == "tqf":
                 # TQF-pow2: scheduling is based on the switch-local
                 # arrival timestamp. Sender-provided cycle_tag is debug-only
                 # and must not decide the queue.
@@ -143,14 +179,21 @@ def tsn_sender(args, cfg, session, events, start_ns, stop_ns, base_ns, cycle_ns,
                 # advances to the next service cycle.
                 cycle_tag = TCQF_PREV_SERVICE_CYCLE.get(slot_id % 8, 6)
 
-            pkt = make_pkt(src_mac, dst_mac,
-                src_ip, dst_ip,
-                fid, cycle_tag,
-                KIND_TSN, seq[fid],
-                session.get("tsn_payload", 300),
-            )
-            sock.send(pkt)
-            seq[fid] += 1
+            for batch_seq in range(batch_size):
+                pkt = make_pkt(src_mac, dst_mac,
+                    src_ip, dst_ip,
+                    fid, cycle_tag,
+                    KIND_TSN, seq[fid],
+                    session.get("tsn_payload", 300),
+                    batch_id=cycle_tag,
+                    batch_seq=batch_seq,
+                    batch_size=batch_size,
+                    mechanism=mechanism,
+                )
+                sock.send(pkt)
+                seq[fid] += 1
+                if burst_gap_us > 0 and batch_seq + 1 < batch_size:
+                    wait_until(time.monotonic_ns() + burst_gap_us * 1000)
 
         cycle += 1
 
@@ -173,6 +216,7 @@ def background_sender(args, cfg, session, bg_flow, start_ns, stop_ns, mechanism)
             bg_flow["fid"], 0 if mechanism == "tqf" else bg_flow.get("cycle_tag", 3),
             KIND_BG, seq,
             session.get("bg_payload", 1200),
+            mechanism=mechanism,
         )
         sock.send(pkt)
         seq += 1
@@ -195,6 +239,8 @@ def build_events(session):
                 "fid": flow["fid"],
                 "qid": flow["qid"],
                 "lead_us": flow.get("lead_us"),
+                "batch_size": flow.get("batch_size", session.get("batch_size", 1)),
+                "burst_gap_us": flow.get("burst_gap_us", session.get("burst_gap_us", 0)),
             })
 
     events.sort(key=lambda x: x["slot"])

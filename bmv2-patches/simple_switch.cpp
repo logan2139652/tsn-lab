@@ -482,7 +482,7 @@ SimpleSwitch::enqueue(port_t egress_port, std::unique_ptr<Packet> &&packet) {
     uint64_t slot_offset_us = now_us & (TSN_SLOT_US - 1);
 
     bm::Logger::get()->info(
-        "TQF_ENQUEUE now_us={} phase_us={} slot_offset_us={} "
+        "CBQF_ENQUEUE now_us={} phase_us={} slot_offset_us={} "
         "enqueue_slot_id={} egress_port={} priority={} queue_idx={}",
         now_us, phase_us, slot_offset_us,
         enqueue_slot_id, egress_port, priority, queue_idx);
@@ -801,14 +801,18 @@ SimpleSwitch::egress_thread(size_t worker_id) {
             cycle_group);
       }
 
-      // TQF with BE fallback: serve the TSN queue for the current slot first;
-      // if it is empty, use the slot gap to send one BE packet from queue 0.
-      int base_queue = TSN_GCL[slot_id];
+      // CBQF slot-level delayed release. Packets are assigned to queue 1/2 by
+      // batch_id parity in P4, while the egress scheduler serves the matching
+      // batch queue in a later slot. Queue 0 is reserved for BE windows.
+      static const std::array<int, SSWITCH_PRIORITY_QUEUEING_NB_QUEUES>
+          CBQF_SLOT_SERVICE = {{1, 2, 1, 2, 0, 2, 1, 0}};
+      int base_queue = CBQF_SLOT_SERVICE[slot_id];
       bool popped = false;
       bool be_fallback = false;
-      bool allow_be_fallback = (slot_id == 0 || slot_id == 4);
+      bool allow_be_fallback = (base_queue == 0);
 
-      if (base_queue > 0 &&
+      if (!allow_be_fallback &&
+          base_queue > 0 &&
           base_queue < static_cast<int>(SSWITCH_PRIORITY_QUEUEING_NB_QUEUES)) {
         popped = egress_buffers.try_pop_back_priority(
             worker_id,
@@ -826,10 +830,12 @@ SimpleSwitch::egress_thread(size_t worker_id) {
 
       if (popped) {
         bm::Logger::get()->info(
-            "TQF_DEQUEUE now_us={} slot_id={} base_queue={} be_fallback={} "
-            "egress_port={} queue_idx={} priority={}",
+            "CBQF_DEQUEUE now_us={} slot_id={} cycle_group={} "
+            "service_queue={} be_fallback={} egress_port={} queue_idx={} "
+            "priority={}",
             now_us,
             slot_id,
+            cycle_group,
             base_queue,
             be_fallback,
             port,

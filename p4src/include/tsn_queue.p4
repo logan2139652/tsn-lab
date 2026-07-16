@@ -132,11 +132,23 @@ control tsn_queue_control(inout headers_t hdr,
         }
     }
 
+    action set_cbqf_batch_queue() {
+        local_metadata.arrival_slot = 8w0;
+        local_metadata.out_slot = 8w0;
+
+        if ((hdr.tsn.cycle_tag & 8w1) == 8w0) {
+            local_metadata.base_queue = 8w1;
+        } else {
+            local_metadata.base_queue = 8w2;
+        }
+
+        /* For CBQF debugging, flags records the selected batch queue. */
+        hdr.tsn.flags = local_metadata.base_queue;
+    }
+
     apply {
         if (hdr.tsn.isValid() && hdr.tsn.kind == 8w1) {
-            compute_arrival_slot();
-            assign_out_slot_d1();
-            set_base_queue_from_out_slot();
+            set_cbqf_batch_queue();
             set_priority_from_queue();
         } else {
             if (hdr.tsn.isValid()) {
@@ -152,7 +164,7 @@ control tsn_debug_egress_control(inout headers_t hdr,
                                  inout standard_metadata_t standard_metadata) {
     apply {
         if (hdr.tsn.isValid()) {
-            hdr.tsn.flags = local_metadata.arrival_slot;
+            hdr.tsn.flags = local_metadata.base_queue;
         }
     }
 }

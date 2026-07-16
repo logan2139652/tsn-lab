@@ -23,10 +23,26 @@ bind_layers(Ether, TSN, type=0x1234)
 bind_layers(TSN, IP, next_type=0x0800)
 
 APP_HDR = struct.Struct("!4sHBIQ")
+CBQF_APP_HDR = struct.Struct("!4sHBIQBBB")
 KIND_NAME = {1: "TSN", 2: "BG"}
 
 stats = {}
 rows = []
+mechanism = "basic"
+
+def detect_mechanism(cfg):
+    name = cfg.get("mechanism")
+    if name:
+        return name.lower()
+    if cfg.get("cbqf", {}).get("enabled"):
+        return "cbqf"
+    if cfg.get("tqf", {}).get("enabled"):
+        return "tqf"
+    if cfg.get("tcqf", {}).get("enabled"):
+        return "tcqf"
+    if cfg.get("csqf", {}).get("enabled"):
+        return "csqf"
+    return "basic"
 
 def percentile(values, p):
     if not values:
@@ -56,7 +72,15 @@ def handle(pkt):
     if len(raw) < APP_HDR.size:
         return
 
-    magic, fid, kind, seq, send_ns = APP_HDR.unpack(raw[:APP_HDR.size])
+    batch_id = 0
+    batch_seq = 0
+    batch_size = 1
+    if mechanism == "cbqf" and len(raw) >= CBQF_APP_HDR.size:
+        magic, fid, kind, seq, send_ns, batch_id, batch_seq, batch_size = (
+            CBQF_APP_HDR.unpack(raw[:CBQF_APP_HDR.size]))
+    else:
+        magic, fid, kind, seq, send_ns = APP_HDR.unpack(raw[:APP_HDR.size])
+
     if magic != b"TSN1":
         return
 
@@ -76,6 +100,10 @@ def handle(pkt):
         "ttl": tsn_hdr.ttl if tsn_hdr else -1,
         "flags": tsn_hdr.flags if tsn_hdr else -1,
         "seq": seq,
+        "batch_id": batch_id,
+        "batch_seq": batch_seq,
+        "batch_size": batch_size,
+        "batch_no": seq // max(1, batch_size),
         "delay_us": f"{delay_us:.3f}",
     })
 
@@ -88,11 +116,13 @@ def main():
     parser.add_argument("--session", default="h1_h3")
     args = parser.parse_args()
 
+    global mechanism
     stats.clear()
     rows.clear()
 
     with open(args.config) as f:
         cfg = json.load(f)
+    mechanism = detect_mechanism(cfg)
 
     session = cfg["traffic"]["sessions"][args.session]
     recv_cfg = session["receiver"]
@@ -102,6 +132,7 @@ def main():
     csv_path = args.csv or recv_cfg.get("csv", "/tmp/tsn_recv_delay.csv")
 
     print(f"session={args.session}")
+    print(f"mechanism={mechanism}")
     print(f"listening on {iface}, duration={duration}s")
     print(f"csv output: {csv_path}")
 
@@ -119,7 +150,9 @@ def main():
             fieldnames=[
                 "recv_ns", "kind", "fid",
                 "cycle_tag", "ttl",
-                "flags", "seq", "delay_us",
+                "flags", "seq",
+                "batch_id", "batch_seq", "batch_size", "batch_no",
+                "delay_us",
             ],
         )
         writer.writeheader()
